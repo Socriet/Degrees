@@ -2,7 +2,7 @@ import customtkinter as ctk
 
 import degrees
 
-ctk.set_appearance_mode("system")  # follows your OS: "dark" or "light"
+ctk.set_appearance_mode("system")  # start with the OS setting
 ctk.set_default_color_theme("blue")
 
 
@@ -12,6 +12,11 @@ def load(directory):
     degrees.people.clear()
     degrees.movies.clear()
     degrees.load_data(directory)
+
+
+def toggle_mode():
+    ctk.set_appearance_mode("dark" if mode_switch.get() else "light")
+    mode_switch.configure(text="Dark" if mode_switch.get() else "Light")
 
 
 def choose_person(name):
@@ -95,6 +100,13 @@ ctk.CTkLabel(root, text="Degrees of Separation",
              font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, pady=(24, 4))
 ctk.CTkLabel(root, text="Find how two actors are connected through movies",
              text_color="gray").grid(row=1, column=0, pady=(0, 16))
+
+# Dark / light switch (top-right, sharing the title's grid cell)
+is_dark = ctk.get_appearance_mode() == "Dark"
+mode_switch = ctk.CTkSwitch(root, text="Dark" if is_dark else "Light", command=toggle_mode, width=90)
+mode_switch.grid(row=0, column=0, padx=20, pady=(20, 0), sticky="ne")
+if is_dark:
+    mode_switch.select()
 
 # Dataset card
 card1 = ctk.CTkFrame(root, corner_radius=12)
