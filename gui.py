@@ -1,3 +1,5 @@
+import json
+import os
 from datetime import datetime
 
 import customtkinter as ctk
@@ -7,7 +9,30 @@ import degrees
 ctk.set_appearance_mode("system")  # start with the OS setting
 ctk.set_default_color_theme("blue")
 
-history = []  # lives in memory only; gone when the app closes
+MAX_HISTORY = 10
+HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history.json")
+
+
+def load_history():
+    """Read saved searches from disk; return [] if missing or unreadable."""
+    try:
+        with open(HISTORY_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        keys = {"a", "b", "summary", "result", "dataset", "time"}
+        return [e for e in data if isinstance(e, dict) and keys <= e.keys()][-MAX_HISTORY:]
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def save_history():
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+    except OSError:
+        pass  # if saving fails, the app still works for this session
+
+
+history = load_history()  # oldest first, newest last
 
 
 def load(directory):
@@ -79,6 +104,7 @@ def refresh_history():
 
 def clear_history():
     history.clear()
+    save_history()
     refresh_history()
 
 
@@ -92,8 +118,10 @@ def open_entry(e):
 def add_history(a, b, summary, result):
     history.append({
         "a": a, "b": b, "summary": summary, "result": result,
-        "dataset": dataset.get(), "time": datetime.now().strftime("%H:%M"),
+        "dataset": dataset.get(), "time": datetime.now().strftime("%d/%m %H:%M"),
     })
+    del history[:-MAX_HISTORY]  # keep only the newest 10
+    save_history()
     refresh_history()
 
 
@@ -194,7 +222,7 @@ tab_history.grid_rowconfigure(1, weight=1)
 header = ctk.CTkFrame(tab_history, fg_color="transparent")
 header.grid(row=0, column=0, padx=8, pady=(8, 4), sticky="ew")
 header.grid_columnconfigure(0, weight=1)
-ctk.CTkLabel(header, text="Recent searches (cleared when the app closes)", text_color="gray").grid(row=0, column=0, sticky="w")
+ctk.CTkLabel(header, text=f"Last {MAX_HISTORY} searches (saved between sessions)", text_color="gray").grid(row=0, column=0, sticky="w")
 ctk.CTkButton(header, text="Clear history", width=110, fg_color="gray40", hover_color="gray30",
               command=clear_history).grid(row=0, column=1)
 
