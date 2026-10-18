@@ -1,9 +1,13 @@
+from datetime import datetime
+
 import customtkinter as ctk
 
 import degrees
 
 ctk.set_appearance_mode("system")  # start with the OS setting
 ctk.set_default_color_theme("blue")
+
+history = []  # lives in memory only; gone when the app closes
 
 
 def load(directory):
@@ -59,6 +63,40 @@ def show(text):
     out.configure(state="disabled")
 
 
+def refresh_history():
+    for w in hist_frame.winfo_children():
+        w.destroy()
+    if not history:
+        ctk.CTkLabel(hist_frame, text="No searches yet.", text_color="gray").pack(pady=20)
+        return
+    for e in reversed(history):  # newest first
+        ctk.CTkButton(
+            hist_frame, height=54, anchor="w",
+            text=f"{e['a']}  →  {e['b']}\n{e['summary']}  ·  {e['dataset']}  ·  {e['time']}",
+            command=lambda e=e: open_entry(e),
+        ).pack(fill="x", pady=3)
+
+
+def clear_history():
+    history.clear()
+    refresh_history()
+
+
+def open_entry(e):
+    name1.set(e["a"])
+    name2.set(e["b"])
+    show(e["result"])
+    tabview.set("Search")
+
+
+def add_history(a, b, summary, result):
+    history.append({
+        "a": a, "b": b, "summary": summary, "result": result,
+        "dataset": dataset.get(), "time": datetime.now().strftime("%H:%M"),
+    })
+    refresh_history()
+
+
 def on_load():
     status.configure(text="Loading data...")
     root.update_idletasks()
@@ -77,29 +115,36 @@ def on_search(event=None):
     if target is None:
         return show(f"'{name2.get()}' not found.")
 
+    a = degrees.people[source]["name"]
+    b = degrees.people[target]["name"]
+
     path = degrees.shortest_path(source, target)
     if path is None:
-        return show("Not connected.")
+        show("Not connected.")
+        return add_history(a, b, "Not connected", "Not connected.")
 
     lines = [f"{len(path)} degrees of separation.\n"]
-    path = [(None, source)] + path
-    for i in range(len(path) - 1):
-        p1 = degrees.people[path[i][1]]["name"]
-        p2 = degrees.people[path[i + 1][1]]["name"]
-        movie = degrees.movies[path[i + 1][0]]["title"]
+    steps = [(None, source)] + path
+    for i in range(len(steps) - 1):
+        p1 = degrees.people[steps[i][1]]["name"]
+        p2 = degrees.people[steps[i + 1][1]]["name"]
+        movie = degrees.movies[steps[i + 1][0]]["title"]
         lines.append(f"{i + 1}. {p1} and {p2} starred in {movie}")
-    show("\n\n".join(lines))
+    result = "\n\n".join(lines)
+    show(result)
+    add_history(a, b, f"{len(path)} degree{'s' if len(path) != 1 else ''}", result)
 
 
 root = ctk.CTk()
 root.title("Degrees of Separation")
-root.geometry("580x560")
+root.geometry("600x640")
 root.grid_columnconfigure(0, weight=1)
+root.grid_rowconfigure(2, weight=1)
 
 ctk.CTkLabel(root, text="Degrees of Separation",
              font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, pady=(24, 4))
 ctk.CTkLabel(root, text="Find how two actors are connected through movies",
-             text_color="gray").grid(row=1, column=0, pady=(0, 16))
+             text_color="gray").grid(row=1, column=0, pady=(0, 8))
 
 # Dark / light switch (top-right, sharing the title's grid cell)
 is_dark = ctk.get_appearance_mode() == "Dark"
@@ -108,17 +153,25 @@ mode_switch.grid(row=0, column=0, padx=20, pady=(20, 0), sticky="ne")
 if is_dark:
     mode_switch.select()
 
-# Dataset card
-card1 = ctk.CTkFrame(root, corner_radius=12)
-card1.grid(row=2, column=0, padx=24, sticky="ew")
+# Tabs
+tabview = ctk.CTkTabview(root)
+tabview.grid(row=2, column=0, padx=16, pady=(0, 4), sticky="nsew")
+tab_search = tabview.add("Search")
+tab_history = tabview.add("History")
+
+# --- Search tab ---
+tab_search.grid_columnconfigure(0, weight=1)
+tab_search.grid_rowconfigure(2, weight=1)
+
+card1 = ctk.CTkFrame(tab_search, corner_radius=12)
+card1.grid(row=0, column=0, padx=8, pady=(8, 0), sticky="ew")
 card1.grid_columnconfigure(0, weight=1)
 dataset = ctk.StringVar(value="small")
 ctk.CTkSegmentedButton(card1, values=["small", "large"], variable=dataset).grid(row=0, column=0, padx=16, pady=16, sticky="w")
 ctk.CTkButton(card1, text="Load data", width=110, command=on_load).grid(row=0, column=1, padx=16, pady=16)
 
-# Search card
-card2 = ctk.CTkFrame(root, corner_radius=12)
-card2.grid(row=3, column=0, padx=24, pady=12, sticky="ew")
+card2 = ctk.CTkFrame(tab_search, corner_radius=12)
+card2.grid(row=1, column=0, padx=8, pady=12, sticky="ew")
 card2.grid_columnconfigure((0, 1), weight=1)
 name1 = ctk.StringVar()
 name2 = ctk.StringVar()
@@ -131,12 +184,25 @@ e2.bind("<Return>", on_search)
 search_btn = ctk.CTkButton(card2, text="Find connection", height=40, state="disabled", command=on_search)
 search_btn.grid(row=1, column=0, columnspan=2, padx=16, pady=(8, 16), sticky="ew")
 
-# Results
-out = ctk.CTkTextbox(root, height=180, corner_radius=12, font=ctk.CTkFont(size=14), wrap="word", state="disabled")
-out.grid(row=4, column=0, padx=24, sticky="nsew")
-root.grid_rowconfigure(4, weight=1)
+out = ctk.CTkTextbox(tab_search, height=160, corner_radius=12, font=ctk.CTkFont(size=14), wrap="word", state="disabled")
+out.grid(row=2, column=0, padx=8, pady=(0, 8), sticky="nsew")
+
+# --- History tab ---
+tab_history.grid_columnconfigure(0, weight=1)
+tab_history.grid_rowconfigure(1, weight=1)
+
+header = ctk.CTkFrame(tab_history, fg_color="transparent")
+header.grid(row=0, column=0, padx=8, pady=(8, 4), sticky="ew")
+header.grid_columnconfigure(0, weight=1)
+ctk.CTkLabel(header, text="Recent searches (cleared when the app closes)", text_color="gray").grid(row=0, column=0, sticky="w")
+ctk.CTkButton(header, text="Clear history", width=110, fg_color="gray40", hover_color="gray30",
+              command=clear_history).grid(row=0, column=1)
+
+hist_frame = ctk.CTkScrollableFrame(tab_history)
+hist_frame.grid(row=1, column=0, padx=8, pady=(0, 8), sticky="nsew")
+refresh_history()
 
 status = ctk.CTkLabel(root, text="Load a dataset to begin.", text_color="gray")
-status.grid(row=5, column=0, pady=12)
+status.grid(row=3, column=0, pady=8)
 
 root.mainloop()
