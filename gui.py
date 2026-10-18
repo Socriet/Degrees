@@ -1,7 +1,9 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
+import customtkinter as ctk
 
 import degrees
+
+ctk.set_appearance_mode("system")  # follows your OS: "dark" or "light"
+ctk.set_default_color_theme("blue")
 
 
 def load(directory):
@@ -20,50 +22,55 @@ def choose_person(name):
     if len(ids) == 1:
         return ids[0]
 
-    win = tk.Toplevel(root)
+    win = ctk.CTkToplevel(root)
     win.title(f"Which {name}?")
-    win.grab_set()
-    lb = tk.Listbox(win, width=55, height=min(len(ids), 10))
-    for i in ids:
-        p = degrees.people[i]
-        lb.insert(tk.END, f"{p['name']} (born {p['birth']}) - ID {i}")
-    lb.pack(padx=10, pady=10)
+    win.geometry("440x340")
+    win.transient(root)
+    win.after(100, win.grab_set)
+
+    ctk.CTkLabel(win, text=f"Which '{name}'?", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(16, 8))
+    frame = ctk.CTkScrollableFrame(win)
+    frame.pack(fill="both", expand=True, padx=16, pady=(0, 16))
 
     choice = []
 
-    def ok():
-        sel = lb.curselection()
-        if sel:
-            choice.append(ids[sel[0]])
-            win.destroy()
+    def pick(person_id):
+        choice.append(person_id)
+        win.destroy()
 
-    ttk.Button(win, text="Select", command=ok).pack(pady=(0, 10))
+    for i in ids:
+        p = degrees.people[i]
+        ctk.CTkButton(frame, text=f"{p['name']}  ·  born {p['birth']}  ·  ID {i}",
+                      anchor="w", command=lambda i=i: pick(i)).pack(fill="x", pady=3)
+
     root.wait_window(win)
     return choice[0] if choice else None
 
 
 def show(text):
-    out.config(state="normal")
-    out.delete("1.0", tk.END)
-    out.insert(tk.END, text)
-    out.config(state="disabled")
+    out.configure(state="normal")
+    out.delete("1.0", "end")
+    out.insert("end", text)
+    out.configure(state="disabled")
 
 
 def on_load():
-    status.set("Loading data...")
+    status.configure(text="Loading data...")
     root.update_idletasks()
     load(dataset.get())
-    status.set(f"Loaded '{dataset.get()}' dataset.")
-    search_btn.config(state="normal")
+    status.configure(text=f"Loaded '{dataset.get()}' dataset.")
+    search_btn.configure(state="normal")
 
 
-def on_search():
+def on_search(event=None):
+    if search_btn.cget("state") == "disabled":
+        return
     source = choose_person(name1.get())
     if source is None:
-        return messagebox.showerror("Error", f"'{name1.get()}' not found.")
+        return show(f"'{name1.get()}' not found.")
     target = choose_person(name2.get())
     if target is None:
-        return messagebox.showerror("Error", f"'{name2.get()}' not found.")
+        return show(f"'{name2.get()}' not found.")
 
     path = degrees.shortest_path(source, target)
     if path is None:
@@ -75,32 +82,49 @@ def on_search():
         p1 = degrees.people[path[i][1]]["name"]
         p2 = degrees.people[path[i + 1][1]]["name"]
         movie = degrees.movies[path[i + 1][0]]["title"]
-        lines.append(f"{i + 1}: {p1} and {p2} starred in {movie}")
-    show("\n".join(lines))
+        lines.append(f"{i + 1}. {p1} and {p2} starred in {movie}")
+    show("\n\n".join(lines))
 
 
-root = tk.Tk()
+root = ctk.CTk()
 root.title("Degrees of Separation")
+root.geometry("580x560")
+root.grid_columnconfigure(0, weight=1)
 
-dataset = tk.StringVar(value="small")
-name1, name2, status = tk.StringVar(), tk.StringVar(), tk.StringVar(value="Load a dataset to begin.")
+ctk.CTkLabel(root, text="Degrees of Separation",
+             font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, pady=(24, 4))
+ctk.CTkLabel(root, text="Find how two actors are connected through movies",
+             text_color="gray").grid(row=1, column=0, pady=(0, 16))
 
-ttk.Label(root, text="Dataset:").grid(row=0, column=0, padx=8, pady=6, sticky="e")
-ttk.Combobox(root, textvariable=dataset, values=["small", "large"], state="readonly", width=10).grid(row=0, column=1, sticky="w")
-ttk.Button(root, text="Load data", command=on_load).grid(row=0, column=2, padx=8)
+# Dataset card
+card1 = ctk.CTkFrame(root, corner_radius=12)
+card1.grid(row=2, column=0, padx=24, sticky="ew")
+card1.grid_columnconfigure(0, weight=1)
+dataset = ctk.StringVar(value="small")
+ctk.CTkSegmentedButton(card1, values=["small", "large"], variable=dataset).grid(row=0, column=0, padx=16, pady=16, sticky="w")
+ctk.CTkButton(card1, text="Load data", width=110, command=on_load).grid(row=0, column=1, padx=16, pady=16)
 
-ttk.Label(root, text="Person 1:").grid(row=1, column=0, padx=8, pady=6, sticky="e")
-ttk.Entry(root, textvariable=name1, width=30).grid(row=1, column=1, columnspan=2, sticky="w")
+# Search card
+card2 = ctk.CTkFrame(root, corner_radius=12)
+card2.grid(row=3, column=0, padx=24, pady=12, sticky="ew")
+card2.grid_columnconfigure((0, 1), weight=1)
+name1 = ctk.StringVar()
+name2 = ctk.StringVar()
+e1 = ctk.CTkEntry(card2, textvariable=name1, placeholder_text="Person 1  (e.g. Kevin Bacon)", height=38)
+e1.grid(row=0, column=0, padx=(16, 8), pady=(16, 8), sticky="ew")
+e2 = ctk.CTkEntry(card2, textvariable=name2, placeholder_text="Person 2  (e.g. Tom Cruise)", height=38)
+e2.grid(row=0, column=1, padx=(8, 16), pady=(16, 8), sticky="ew")
+e1.bind("<Return>", on_search)
+e2.bind("<Return>", on_search)
+search_btn = ctk.CTkButton(card2, text="Find connection", height=40, state="disabled", command=on_search)
+search_btn.grid(row=1, column=0, columnspan=2, padx=16, pady=(8, 16), sticky="ew")
 
-ttk.Label(root, text="Person 2:").grid(row=2, column=0, padx=8, pady=6, sticky="e")
-ttk.Entry(root, textvariable=name2, width=30).grid(row=2, column=1, columnspan=2, sticky="w")
+# Results
+out = ctk.CTkTextbox(root, height=180, corner_radius=12, font=ctk.CTkFont(size=14), wrap="word", state="disabled")
+out.grid(row=4, column=0, padx=24, sticky="nsew")
+root.grid_rowconfigure(4, weight=1)
 
-search_btn = ttk.Button(root, text="Find connection", command=on_search, state="disabled")
-search_btn.grid(row=3, column=1, pady=8, sticky="w")
-
-out = tk.Text(root, width=60, height=10, state="disabled", wrap="word")
-out.grid(row=4, column=0, columnspan=3, padx=8, pady=4)
-
-ttk.Label(root, textvariable=status).grid(row=5, column=0, columnspan=3, pady=(0, 8))
+status = ctk.CTkLabel(root, text="Load a dataset to begin.", text_color="gray")
+status.grid(row=5, column=0, pady=12)
 
 root.mainloop()
